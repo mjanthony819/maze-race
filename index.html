@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>maze race — bfs vs dfs</title>
+<meta name="description" content="Generate a random maze and watch breadth-first and depth-first search race to the exit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fafafa; --surface:#ffffff; --ink:#171717; --ink-2:#5c5c5c; --ink-3:#8a8a8a;
+    --line:#e4e4e0; --accent:#1d4ed8; --accent-soft:#dbe7ff;
+    --bfs:#2563eb; --dfs:#ea580c; --both:#7c3aed;
+    --wall:#1c1c1a; --cell:#ffffff; --visited-bfs:#cadbff; --visited-dfs:#ffd9bd;
+    --path-bfs:#2563eb; --path-dfs:#ea580c; --start:#16a34a; --end:#dc2626;
+    --shadow:0 1px 2px rgba(0,0,0,.05);
+  }
+  html[data-theme="dark"]{
+    --bg:#101012; --surface:#17171a; --ink:#ededea; --ink-2:#a3a3a0; --ink-3:#6f6f6c;
+    --line:#26262b; --accent:#6d9bff; --accent-soft:#1b2a4d;
+    --wall:#e8e8e4; --cell:#17171a; --visited-bfs:#1e3a6e; --visited-dfs:#6e3618;
+    --path-bfs:#6d9bff; --path-dfs:#ff9a5c; --start:#34d399; --end:#f87171;
+    --shadow:0 1px 2px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    background:var(--bg); color:var(--ink);
+    display:flex; flex-direction:column; min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+    padding:22px 28px 0; max-width:1180px; width:100%; margin:0 auto;
+  }
+  .brand h1{font-size:20px; font-weight:700; letter-spacing:-.02em}
+  .brand h1 .mono{font-family:'IBM Plex Mono',monospace; font-weight:500; color:var(--ink-3); font-size:13px; margin-left:8px}
+  .brand p{font-size:13px; color:var(--ink-2); margin-top:3px}
+  .theme-btn{
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-2);
+    border-radius:999px; padding:7px 14px; font:500 12.5px 'Inter',sans-serif; cursor:pointer;
+    box-shadow:var(--shadow); transition:border-color .15s;
+  }
+  .theme-btn:hover{border-color:var(--ink-3)}
+  main{flex:1; display:flex; flex-direction:column; max-width:1180px; width:100%; margin:0 auto; padding:18px 28px 28px}
+  .toolbar{
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+    background:var(--surface); border:1px solid var(--line); border-radius:14px;
+    padding:12px 14px; box-shadow:var(--shadow); margin-bottom:14px;
+  }
+  .btn{
+    border:1px solid var(--line); background:var(--bg); color:var(--ink);
+    border-radius:9px; padding:8px 14px; font:500 13px 'Inter',sans-serif; cursor:pointer;
+    transition:transform .06s, border-color .15s, background .15s;
+  }
+  .btn:hover{border-color:var(--ink-3)}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn:disabled{opacity:.45; cursor:default; transform:none}
+  .slider-wrap{display:flex; align-items:center; gap:8px; padding:0 6px}
+  .slider-wrap label{font:500 11px 'IBM Plex Mono',monospace; color:var(--ink-3); text-transform:uppercase; letter-spacing:.06em}
+  .slider-wrap output{font:600 12px 'IBM Plex Mono',monospace; color:var(--ink-2); min-width:52px}
+  input[type=range]{accent-color:var(--accent); width:110px; cursor:pointer}
+  .sep{width:1px; height:22px; background:var(--line)}
+  .stage{position:relative; flex:1; min-height:420px; background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); overflow:hidden}
+  canvas{display:block; width:100%; height:100%}
+  .banner{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%) translateY(-8px);
+    background:var(--surface); border:1px solid var(--line); border-radius:999px;
+    padding:8px 18px; font:600 13px 'Inter',sans-serif; box-shadow:0 4px 14px rgba(0,0,0,.12);
+    opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;
+  }
+  .banner.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:14px}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; box-shadow:var(--shadow)}
+  .stat .k{font:500 10.5px 'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-3)}
+  .stat .v{font:600 20px 'IBM Plex Mono',monospace; margin-top:4px; font-variant-numeric:tabular-nums}
+  .stat.bfs .v{color:var(--bfs)} .stat.dfs .v{color:var(--dfs)}
+  .legend{display:flex; gap:18px; margin-top:12px; flex-wrap:wrap}
+  .legend span{display:flex; align-items:center; gap:7px; font-size:12px; color:var(--ink-2)}
+  .dot{width:10px; height:10px; border-radius:3px}
+  footer{max-width:1180px; width:100%; margin:0 auto; padding:0 28px 22px; display:flex; justify-content:space-between; font-size:12px; color:var(--ink-3)}
+  footer a{color:var(--ink-2); text-decoration:none; border-bottom:1px solid var(--line)}
+  kbd{font:500 11px 'IBM Plex Mono',monospace; background:var(--surface); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:1px 5px; color:var(--ink-2)}
+  @media (max-width:640px){ header,main,footer{padding-left:16px; padding-right:16px} .stage{min-height:340px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>maze race <span class="mono">bfs vs dfs</span></h1>
+    <p>generate a random maze, then watch two classic graph searches fight to the exit.</p>
+  </div>
+  <button class="theme-btn" id="themeBtn" aria-label="toggle theme">dark</button>
+</header>
+<main>
+  <div class="toolbar">
+    <button class="btn primary" id="raceBtn">race</button>
+    <button class="btn" id="bfsBtn">bfs only</button>
+    <button class="btn" id="dfsBtn">dfs only</button>
+    <button class="btn" id="newBtn">new maze</button>
+    <div class="sep"></div>
+    <div class="slider-wrap">
+      <label for="sizeRange">size</label>
+      <input type="range" id="sizeRange" min="11" max="61" step="2" value="31">
+      <output id="sizeOut">31 × 21</output>
+    </div>
+    <div class="slider-wrap">
+      <label for="speedRange">speed</label>
+      <input type="range" id="speedRange" min="1" max="40" value="12">
+      <output id="speedOut">12</output>
+    </div>
+  </div>
+  <div class="stage">
+    <canvas id="cv"></canvas>
+    <div class="banner" id="banner"></div>
+  </div>
+  <div class="stats">
+    <div class="stat bfs"><div class="k">bfs visited</div><div class="v" id="bfsVisited">–</div></div>
+    <div class="stat bfs"><div class="k">bfs path length</div><div class="v" id="bfsPath">–</div></div>
+    <div class="stat dfs"><div class="k">dfs visited</div><div class="v" id="dfsVisited">–</div></div>
+    <div class="stat dfs"><div class="k">dfs path length</div><div class="v" id="dfsPath">–</div></div>
+    <div class="stat"><div class="k">open cells</div><div class="v" id="openCells">–</div></div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--start)"></span>start</span>
+    <span><span class="dot" style="background:var(--end)"></span>exit</span>
+    <span><span class="dot" style="background:var(--bfs)"></span>bfs frontier / path</span>
+    <span><span class="dot" style="background:var(--dfs)"></span>dfs frontier / path</span>
+    <span style="margin-left:auto"><kbd>space</kbd> race &nbsp;<kbd>r</kbd> new maze</span>
+  </div>
+</main>
+<footer>
+  <span>maze race — vanilla js, no libraries</span>
+  <a href="https://github.com/mjanthony819/maze-race" target="_blank" rel="noopener">github.com/mjanthony819/maze-race</a>
+</footer>
+<script>
+'use strict';
+/* ---------- theme ---------- */
+const root=document.documentElement;
+const savedTheme=localStorage.getItem('maze-theme');
+if(savedTheme){root.dataset.theme=savedTheme;}
+else if(matchMedia('(prefers-color-scheme: dark)').matches){root.dataset.theme='dark';}
+const themeBtn=document.getElementById('themeBtn');
+function syncThemeBtn(){themeBtn.textContent=root.dataset.theme==='dark'?'light':'dark';}
+syncThemeBtn();
+themeBtn.addEventListener('click',()=>{
+  root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';
+  localStorage.setItem('maze-theme',root.dataset.theme);
+  syncThemeBtn(); draw();
+});
+
+/* ---------- maze model ---------- */
+// Cell walls as bitflags: N=1 E=2 S=4 W=8
+let COLS=31, ROWS=21;
+let grid=[];           // grid[y][x] = wall flags
+let start={x:0,y:0}, end={x:COLS-1,y:ROWS-1};
+
+function idx(x,y){return y*COLS+x;}
+function inBounds(x,y){return x>=0&&y>=0&&x<COLS&&y<ROWS;}
+
+function generateMaze(){
+  grid=Array.from({length:ROWS},()=>Array(COLS).fill(15));
+  const visited=new Uint8Array(COLS*ROWS);
+  const stack=[{x:0,y:0}];
+  visited[0]=1;
+  // iterative recursive-backtracker => a "perfect" maze (exactly one path between any two cells)
+  while(stack.length){
+    const cur=stack[stack.length-1];
+    const dirs=[[0,-1,1,4],[1,0,2,8],[0,1,4,1],[-1,0,8,2]].filter(([dx,dy])=>inBounds(cur.x+dx,cur.y+dy)&&!visited[idx(cur.x+dx,cur.y+dy)]);
+    if(!dirs.length){stack.pop();continue;}
+    const [dx,dy,wall,opp]=dirs[(Math.random()*dirs.length)|0];
+    const nx=cur.x+dx, ny=cur.y+dy;
+    grid[cur.y][cur.x]&=~wall;
+    grid[ny][nx]&=~opp;
+    visited[idx(nx,ny)]=1;
+    stack.push({x:nx,y:ny});
+  }
+  start={x:0,y:0}; end={x:COLS-1,y:ROWS-1};
+}
+
+function neighbours(x,y){
+  const w=grid[y][x], out=[];
+  if(!(w&1)) out.push({x,y:y-1});
+  if(!(w&2)) out.push({x:x+1,y});
+  if(!(w&4)) out.push({x,y:y+1});
+  if(!(w&8)) out.push({x:x-1,y});
+  return out;
+}
+
+/* ---------- solvers (steppable generators) ---------- */
+// Each yields the cell it just visited, so the UI can animate one expansion per tick.
+function* bfsGen(){
+  const prev=new Int32Array(COLS*ROWS).fill(-1);
+  const seen=new Uint8Array(COLS*ROWS);
+  const q=[[start.x,start.y]]; let head=0;
+  seen[idx(start.x,start.y)]=1;
+  let visited=0;
+  while(head<q.length){
+    const [x,y]=q[head++]; visited++;
+    yield {x,y,visited,prev,done:x===end.x&&y===end.y};
+    if(x===end.x&&y===end.y) return;
+    for(const n of neighbours(x,y)){
+      const ni=idx(n.x,n.y);
+      if(!seen[ni]){seen[ni]=1; prev[ni]=idx(x,y); q.push([n.x,n.y]);}
+    }
+  }
+}
+function* dfsGen(){
+  const prev=new Int32Array(COLS*ROWS).fill(-1);
+  const seen=new Uint8Array(COLS*ROWS);
+  const stack=[[start.x,start.y]];
+  let visited=0;
+  while(stack.length){
+    const [x,y]=stack.pop();
+    const ci=idx(x,y);
+    if(seen[ci]) continue;
+    seen[ci]=1; visited++;
+    yield {x,y,visited,prev,done:x===end.x&&y===end.y};
+    if(x===end.x&&y===end.y) return;
+    for(const n of neighbours(x,y)){
+      const ni=idx(n.x,n.y);
+      if(!seen[ni]){prev[ni]=ci; stack.push([n.x,n.y]);}
+    }
+  }
+}
+function pathFrom(prev){
+  const path=[]; let cur=idx(end.x,end.y);
+  while(cur!==-1){path.push({x:cur%COLS,y:(cur/COLS)|0}); cur=prev[cur];}
+  return path.reverse();
+}
+
+/* ---------- rendering ---------- */
+const cv=document.getElementById('cv');
+const ctx=cv.getContext('2d');
+let cellPx=20, padX=0, padY=0, dpr=1;
+
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect();
+  dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=r.width*dpr; cv.height=r.height*dpr;
+  cellPx=Math.floor(Math.min((r.width-24)/COLS,(r.height-24)/ROWS));
+  padX=Math.floor((r.width-cellPx*COLS)/2);
+  padY=Math.floor((r.height-cellPx*ROWS)/2);
+  draw();
+}
+function cssVar(name){return getComputedStyle(root).getPropertyValue(name).trim();}
+
+// live render state
+let bfsCells=new Map(), dfsCells=new Map();   // idx -> visit order
+let bfsPath=null, dfsPath=null;
+
+function draw(){
+  const w=cv.width/dpr, h=cv.height/dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  // visited cells
+  for(const [i] of bfsCells){
+    const x=i%COLS,y=(i/COLS)|0;
+    ctx.fillStyle=dfsCells.has(i)?cssVar('--both'):cssVar('--visited-bfs');
+    ctx.globalAlpha=dfsCells.has(i)?0.45:1;
+    ctx.fillRect(padX+x*cellPx,padY+y*cellPx,cellPx,cellPx);
+  }
+  ctx.globalAlpha=1;
+  for(const [i] of dfsCells){
+    if(bfsCells.has(i)) continue;
+    const x=i%COLS,y=(i/COLS)|0;
+    ctx.fillStyle=cssVar('--visited-dfs');
+    ctx.fillRect(padX+x*cellPx,padY+y*cellPx,cellPx,cellPx);
+  }
+  // paths
+  if(bfsPath){strokePath(bfsPath,cssVar('--path-bfs'));}
+  if(dfsPath){strokePath(dfsPath,cssVar('--path-dfs'));}
+  // start / end
+  paintCell(start.x,start.y,cssVar('--start'));
+  paintCell(end.x,end.y,cssVar('--end'));
+  // walls
+  ctx.strokeStyle=cssVar('--wall');
+  ctx.lineWidth=Math.max(1.2,cellPx*0.09);
+  ctx.lineCap='square';
+  ctx.beginPath();
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const wfl=grid[y]&&grid[y][x]; if(wfl===undefined) continue;
+    const px=padX+x*cellPx, py=padY+y*cellPx;
+    if(wfl&1){ctx.moveTo(px,py);ctx.lineTo(px+cellPx,py);}
+    if(wfl&8){ctx.moveTo(px,py);ctx.lineTo(px,py+cellPx);}
+    if(x===COLS-1&&(wfl&2)){ctx.moveTo(px+cellPx,py);ctx.lineTo(px+cellPx,py+cellPx);}
+    if(y===ROWS-1&&(wfl&4)){ctx.moveTo(px,py+cellPx);ctx.lineTo(px+cellPx,py+cellPx);}
+  }
+  ctx.stroke();
+  // outer border
+  ctx.strokeRect(padX,padY,cellPx*COLS,cellPx*ROWS);
+}
+function paintCell(x,y,color){
+  const inset=Math.max(1.5,cellPx*0.16);
+  ctx.fillStyle=color;
+  ctx.fillRect(padX+x*cellPx+inset,padY+y*cellPx+inset,cellPx-inset*2,cellPx-inset*2);
+}
+function strokePath(path,color){
+  ctx.strokeStyle=color;
+  ctx.lineWidth=Math.max(2,cellPx*0.28);
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.beginPath();
+  path.forEach((p,i)=>{
+    const cx=padX+p.x*cellPx+cellPx/2, cy=padY+p.y*cellPx+cellPx/2;
+    i?ctx.lineTo(cx,cy):ctx.moveTo(cx,cy);
+  });
+  ctx.stroke();
+}
+
+/* ---------- run control ---------- */
+const banner=document.getElementById('banner');
+const els={
+  bfsVisited:document.getElementById('bfsVisited'),
+  bfsPath:document.getElementById('bfsPath'),
+  dfsVisited:document.getElementById('dfsVisited'),
+  dfsPath:document.getElementById('dfsPath'),
+  openCells:document.getElementById('openCells'),
+};
+let rafId=null, running=false;
+
+function stopRun(){running=false; if(rafId)cancelAnimationFrame(rafId); rafId=null; setButtons(false);}
+function setButtons(b){
+  document.getElementById('raceBtn').disabled=b;
+  document.getElementById('bfsBtn').disabled=b;
+  document.getElementById('dfsBtn').disabled=b;
+}
+function resetView(){
+  stopRun();
+  bfsCells.clear(); dfsCells.clear(); bfsPath=dfsPath=null;
+  banner.classList.remove('show');
+  els.bfsVisited.textContent=els.bfsPath.textContent='–';
+  els.dfsVisited.textContent=els.dfsPath.textContent='–';
+  draw();
+}
+function showBanner(html){banner.innerHTML=html; banner.classList.add('show');}
+
+function run(mode){
+  resetView();
+  running=true; setButtons(true);
+  const bfs=(mode==='race'||mode==='bfs')?bfsGen():null;
+  const dfs=(mode==='race'||mode==='dfs')?dfsGen():null;
+  let bfsDone=!bfs, dfsDone=!dfs;
+  let acc=0, last=performance.now();
+  const stepsPerTick=()=>+document.getElementById('speedRange').value;
+
+  function finish(){
+    running=false; setButtons(false);
+    if(bfs&&bfsDone&&bfs._prev){bfsPath=pathFrom(bfs._prev); els.bfsPath.textContent=bfsPath.length;}
+    if(dfs&&dfsDone&&dfs._prev){dfsPath=pathFrom(dfs._prev); els.dfsPath.textContent=dfsPath.length;}
+    if(mode==='race'&&bfsPath&&dfsPath){
+      const bv=+els.bfsVisited.textContent, dv=+els.dfsVisited.textContent;
+      const winner=bv===dv?'dead heat':bv<dv
+        ?`<span style="color:var(--bfs)">bfs wins</span> — ${bv} vs ${dv} cells`
+        :`<span style="color:var(--dfs)">dfs wins</span> — ${dv} vs ${bv} cells`;
+      showBanner(winner+` · optimal path is ${bfsPath.length} cells`);
+    } else if(bfsPath){
+      showBanner(`bfs found the exit — shortest path ${bfsPath.length} cells, ${els.bfsVisited.textContent} visited`);
+    } else if(dfsPath){
+      showBanner(`dfs found the exit — path ${dfsPath.length} cells, ${els.dfsVisited.textContent} visited`);
+    }
+    draw();
+  }
+
+  function step(){
+    if(!running) return;
+    const n=stepsPerTick();
+    for(let i=0;i<n;i++){
+      if(bfs&&!bfsDone){
+        const r=bfs.next();
+        if(r.done||r.value.done){bfsDone=true; if(r.value){bfs._prev=r.value.prev; bfsCells.set(idx(r.value.x,r.value.y),1); els.bfsVisited.textContent=r.value.visited;}}
+        else{bfsCells.set(idx(r.value.x,r.value.y),1); els.bfsVisited.textContent=r.value.visited;}
+      }
+      if(dfs&&!dfsDone){
+        const r=dfs.next();
+        if(r.done||r.value.done){dfsDone=true; if(r.value){dfs._prev=r.value.prev; dfsCells.set(idx(r.value.x,r.value.y),1); els.dfsVisited.textContent=r.value.visited;}}
+        else{dfsCells.set(idx(r.value.x,r.value.y),1); els.dfsVisited.textContent=r.value.visited;}
+      }
+      if(bfsDone&&dfsDone) break;
+    }
+    draw();
+    if(bfsDone&&dfsDone){finish(); return;}
+    rafId=requestAnimationFrame(step);
+  }
+  rafId=requestAnimationFrame(step);
+}
+
+/* ---------- ui wiring ---------- */
+function rebuild(){
+  const size=+document.getElementById('sizeRange').value;
+  COLS=size;
+  ROWS=Math.max(9,Math.round(size*0.68))|1; // keep odd-ish proportions
+  document.getElementById('sizeOut').textContent=`${COLS} × ${ROWS}`;
+  generateMaze();
+  els.openCells.textContent=(COLS*ROWS).toLocaleString();
+  resetView();
+}
+document.getElementById('raceBtn').addEventListener('click',()=>run('race'));
+document.getElementById('bfsBtn').addEventListener('click',()=>run('bfs'));
+document.getElementById('dfsBtn').addEventListener('click',()=>run('dfs'));
+document.getElementById('newBtn').addEventListener('click',rebuild);
+document.getElementById('sizeRange').addEventListener('change',rebuild);
+document.getElementById('speedRange').addEventListener('input',e=>{
+  document.getElementById('speedOut').textContent=e.target.value;
+});
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&e.target===document.body){e.preventDefault(); run('race');}
+  if(e.key==='r'||e.key==='R'){rebuild();}
+});
+window.addEventListener('resize',resize);
+
+rebuild();
+resize();
+</script>
+</body>
+</html>
