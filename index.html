@@ -87,6 +87,11 @@
   footer a{color:var(--ink-2); text-decoration:none; border-bottom:1px solid var(--line)}
   kbd{font:500 11px 'IBM Plex Mono',monospace; background:var(--surface); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:1px 5px; color:var(--ink-2)}
   @media (max-width:640px){ header,main,footer{padding-left:16px; padding-right:16px} .stage{min-height:340px} }
+  @media (prefers-reduced-motion: no-preference){
+    @keyframes uiRise{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+    header{animation:uiRise .45s cubic-bezier(.22,.61,.36,1) both}
+    main{animation:uiRise .55s cubic-bezier(.22,.61,.36,1) .08s both}
+  }
 </style>
 </head>
 <body>
